@@ -51,7 +51,7 @@ from .utils.jinja import (
 )
 from .utils.lazy_loader import lazy_import
 
-__version__ = "15.111.1"
+__version__ = "15.115.1"
 __title__ = "Frappe Framework"
 
 # This if block is never executed when running the code. It is only used for
@@ -239,7 +239,6 @@ def init(site: str, sites_path: str = ".", new_site: bool = False, force=False) 
 
 	local.user = None
 	local.user_perms = None
-	local.session = None
 	local.role_permissions = {}
 	local.valid_columns = {}
 	local.new_doc_templates = {}
@@ -250,8 +249,8 @@ def init(site: str, sites_path: str = ".", new_site: bool = False, force=False) 
 	local.cache = {}
 	local.form_dict = _dict()
 	local.preload_assets = {"style": [], "script": [], "icons": []}
-	local.session = _dict()
-	local.dev_server = _dev_server
+	local.session = _dict(user="Guest")
+	local.dev_server = _dev_server  # only for backwards compatibility
 	local.qb = get_query_builder(local.conf.db_type)
 	local.qb.get_query = get_query
 	setup_redis_cache_connection()
@@ -290,6 +289,7 @@ def connect(site: str | None = None, db_name: str | None = None, set_admin_as_us
 		password=local.conf.db_password,
 		cur_db_name=local.conf.db_name or db_name,
 	)
+
 	if set_admin_as_user:
 		set_user("Administrator")
 
@@ -912,6 +912,7 @@ def read_only():
 def write_only():
 	# if replica connection exists, we have to replace it momentarily with the primary connection
 	def innfn(fn):
+		@functools.wraps(fn)
 		def wrapper_fn(*args, **kwargs):
 			primary_db = getattr(local, "primary_db", None)
 			replica_db = getattr(local, "replica_db", None)
@@ -998,6 +999,7 @@ def clear_cache(user: str | None = None, doctype: str | None = None):
 
 		reset_metadata_version()
 		local.cache = {}
+		local.valid_columns = {}
 		local.new_doc_templates = {}
 
 		for fn in get_hooks("clear_cache"):
